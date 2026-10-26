@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
@@ -14,10 +14,12 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
         },
       },
     }
@@ -25,7 +27,6 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Si intenta entrar a /admin sin sesión, mandar al login
   if (request.nextUrl.pathname.startsWith('/admin') && !user) {
     return NextResponse.redirect(new URL('/iniciar-sesion', request.url));
   }
