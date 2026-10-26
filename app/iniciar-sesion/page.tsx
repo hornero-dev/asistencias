@@ -1,6 +1,5 @@
 'use client';
 import { useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import { Lock, Mail, AlertCircle } from 'lucide-react';
 
 export default function IniciarSesionPage() {
@@ -15,48 +14,22 @@ export default function IniciarSesionPage() {
     setError('');
 
     try {
-      // 1. Iniciar sesión en Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (authError || !authData.user) {
-        setError(authError?.message || 'Credenciales incorrectas.');
-        setCargando(false);
-        return;
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Credenciales inválidas');
       }
 
-      // 2. Consultar perfil con sesión confirmada
-      const { data: perfil, error: perfilError } = await supabase
-        .from('profiles')
-        .select('id, role')
-        .eq('id', authData.user.id)
-        .maybeSingle();
-
-      if (perfilError) {
-        setError(`Error de base de datos: ${perfilError.message}`);
-        setCargando(false);
-        return;
-      }
-
-      if (!perfil) {
-        setError(`No se encontró registro en public.profiles para el usuario.`);
-        setCargando(false);
-        return;
-      }
-
-      if (perfil.role !== 'admin' && perfil.role !== 'supervisor') {
-        await supabase.auth.signOut();
-        setError(`Rol actual: "${perfil.role}". Se requiere rol admin o supervisor.`);
-        setCargando(false);
-        return;
-      }
-
-      // 3. Forzar redirección limpia enviando las cookies de sesión al servidor
+      // Con las cookies ya escritas en el servidor, la redirección es directa
       window.location.href = '/admin';
     } catch (err: any) {
-      setError(err.message || 'Error inesperado durante el ingreso.');
+      setError(err.message || 'Error de conexión');
       setCargando(false);
     }
   };
