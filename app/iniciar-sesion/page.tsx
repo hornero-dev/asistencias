@@ -16,31 +16,47 @@ export default function IniciarSesionPage() {
     setCargando(true);
     setError('');
 
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
+    // 1. Iniciar sesión en Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
       password,
     });
 
-    if (authError) {
-      setError('Credenciales incorrectas o usuario no autorizado.');
+    if (authError || !authData.user) {
+      setError(authError?.message || 'Credenciales incorrectas.');
       setCargando(false);
       return;
     }
 
-    // Validar rol en profiles
-    const { data: perfil } = await supabase
+    // 2. Consultar perfil con sesión confirmada
+    const { data: perfil, error: perfilError } = await supabase
       .from('profiles')
-      .select('role')
-      .eq('id', data.user.id)
-      .single();
+      .select('id, role, full_name')
+      .eq('id', authData.user.id)
+      .maybeSingle();
 
-    if (!perfil || (perfil.role !== 'admin' && perfil.role !== 'supervisor')) {
-      await supabase.auth.signOut();
-      setError('Tu cuenta no tiene permisos administrativos.');
+    if (perfilError) {
+      console.error('Error al consultar perfil:', perfilError);
+      setError(`Error de base de datos: ${perfilError.message}`);
       setCargando(false);
       return;
     }
 
+    if (!perfil) {
+      setError(`No se encontró registro en public.profiles para el UID: ${authData.user.id}`);
+      setCargando(false);
+      return;
+    }
+
+    if (perfil.role !== 'admin' && perfil.role !== 'supervisor') {
+      await supabase.auth.signOut();
+      setError(`Rol actual: "${perfil.role}". Se requiere rol admin o supervisor.`);
+      setCargando(false);
+      return;
+    }
+
+    // 3. Redirigir al panel
+    router.refresh();
     router.push('/admin');
   };
 
@@ -56,8 +72,9 @@ export default function IniciarSesionPage() {
         <p className="text-xs text-center text-slate-500 mb-6">Ingreso restringido para administradores</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-rose-50 text-rose-700 text-xs rounded-lg flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+          <div className="mb-4 p-3 bg-rose-50 text-rose-700 text-xs rounded-lg flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
 
